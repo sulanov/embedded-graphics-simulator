@@ -63,8 +63,51 @@ pub enum SimulatorEvent {
         /// The current mouse position
         point: Point,
     },
+    /// Touch started event
+    TouchStarted {
+        /// The ID of the finger that started the touch
+        id: i64,
+        /// The location of the touch in Simulator coordinates
+        point: Point,
+        /// The pressure of the touch.
+        pressure: u32,
+    },
+    /// Touch moved event
+    TouchMoved {
+        /// The ID of the finger that moved
+        id: i64,
+        /// The location of the touch in Simulator coordinates
+        point: Point,
+        /// The pressure of the touch.
+        pressure: u32,
+    },
+    /// Touch ended event
+    TouchEnded {
+        /// The ID of the finger that ended the touch
+        id: i64,
+        /// The location of the touch in Simulator coordinates
+        point: Point,
+        /// The pressure of the touch.
+        pressure: u32,
+    },
+    /// Touch cancelled event
+    TouchCancelled {
+        /// The ID of the finger whose touch was cancelled
+        id: i64,
+        /// The location of the touch in Simulator coordinates
+        point: Point,
+        /// The pressure of the touch.
+        pressure: u32,
+    },
     /// An exit event
     Quit,
+}
+
+fn scale_touch_pos(x: f32, y: f32, size: Size) -> Point {
+    Point::new(
+        (x * size.width as f32) as i32,
+        (y * size.height as f32) as i32,
+    )
 }
 
 /// Iterator over simulator events.
@@ -74,6 +117,7 @@ pub enum SimulatorEvent {
 pub struct SimulatorEventsIter<'a> {
     event_pump: RefMut<'a, EventPump>,
     output_settings: OutputSettings,
+    size: Size,
 }
 
 impl Iterator for SimulatorEventsIter<'_> {
@@ -134,6 +178,54 @@ impl Iterator for SimulatorEventsIter<'_> {
                         scroll_delta: Point::new(x, y),
                         direction,
                     })
+                }
+                Event::FingerDown {
+                    finger_id,
+                    x,
+                    y,
+                    pressure,
+                    ..
+                } => {
+                    let point = self
+                        .output_settings
+                        .output_to_display(scale_touch_pos(x, y, self.size));
+                    return Some(SimulatorEvent::TouchStarted {
+                        id: finger_id,
+                        point,
+                        pressure: (pressure * 100.0) as u32,
+                    });
+                }
+                Event::FingerMotion {
+                    finger_id,
+                    x,
+                    y,
+                    pressure,
+                    ..
+                } => {
+                    let point = self
+                        .output_settings
+                        .output_to_display(scale_touch_pos(x, y, self.size));
+                    return Some(SimulatorEvent::TouchMoved {
+                        id: finger_id,
+                        point,
+                        pressure: (pressure * 100.0) as u32,
+                    });
+                }
+                Event::FingerUp {
+                    finger_id,
+                    x,
+                    y,
+                    pressure,
+                    ..
+                } => {
+                    let point = self
+                        .output_settings
+                        .output_to_display(scale_touch_pos(x, y, self.size));
+                    return Some(SimulatorEvent::TouchEnded {
+                        id: finger_id,
+                        point,
+                        pressure: (pressure * 100.0) as u32,
+                    });
                 }
                 _ => {
                     // ignore other events and check next event
@@ -208,6 +300,7 @@ impl SdlWindow {
         SimulatorEventsIter {
             event_pump: self.event_pump.borrow_mut(),
             output_settings: output_settings.clone(),
+            size: self.size,
         }
     }
 }
